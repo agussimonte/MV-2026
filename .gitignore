@@ -1,0 +1,17 @@
+# Compilador y binarios
+*.o
+vmx
+*.dSYM/
+
+# Sistema operativo (macOS)
+.DS_Store
+._*
+
+# IDEs y editores
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Documentación y enunciados locales
+*.pdf
