@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <string.h>
 #include "loader.h"
+#include "mmu.h"
 
 int load_vmx(VM *vm, const char *filepath) {
     if (vm == NULL || filepath == NULL) {
@@ -30,7 +31,7 @@ int load_vmx(VM *vm, const char *filepath) {
         }
 
         if (header[0] != 'V' || header[1] != 'M' || header[2] != 'X' || header[3] != '2' || header[4] != '6') {                           
-            fprintf(stderr, "Error: Identificador magico invalido (esperado 'VMX26').\n");
+            fprintf(stderr, "Error: Identificador invalido (esperado 'VMX26').\n");
             fclose(file);
             return 0;
         }
@@ -51,14 +52,11 @@ int load_vmx(VM *vm, const char *filepath) {
             return 0;
         }
 
-        // Inicializar memoria y registros en cero
-        memset(vm->memory, 0, sizeof(vm->memory));//memset <string.h>
+        // inicializa memoria principal y tabla de segmentos mediante la MMU
+        mmu_init(vm);
 
-        // for (int i = 0; i < RAM_SIZE; i++) {
-        //      vm->memory[i] = 0;
-        //}
-
-        memset(vm->registers, 0, sizeof(vm->registers));
+        // inicializa registros en cero
+        memset(vm->registers, 0, sizeof(vm->registers)); //memset <string.h>
 
         // Cargar codigo en memoria principal a partir de la direccion fisica 0
         if (code_size > 0) {
@@ -86,11 +84,7 @@ int load_vmx(VM *vm, const char *filepath) {
         vm->segments[1].base = code_size;
         vm->segments[1].size = (uint16_t)(RAM_SIZE - code_size); //Evitamos warnings con el casteo, ya que size es de 16 bits
 
-        // Segmentos para parte 2 (2 a 7) (-1 / 0xFFFF)
-        for (int i = 2; i < NUM_SEGMENTS; i++) { //
-            vm->segments[i].base = 0xFFFF;
-            vm->segments[i].size = 0xFFFF;
-        }
+ 
 
         // Inicializar registros base
         vm->registers[REG_CS] = 0x00000000; 
