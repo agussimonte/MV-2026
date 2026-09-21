@@ -1,6 +1,6 @@
 CC = gcc
 CFLAGS = -Wall -Wextra -std=c99 -pedantic -g
-SRC = src/main.c src/loader.c src/mmu.c src/decoder.c src/cpu.c src/disasm.c
+SRC = src/main.c src/loader.c src/mmu.c src/decoder.c src/cpu.c src/disasm.c src/alu.c
 OBJ = $(SRC:.c=.o)
 TARGET = vmx
 
