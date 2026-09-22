@@ -3,8 +3,8 @@
 #include <string.h>
 #include "mmu.h"
 
-void mmu_init(VM *vm) {
-    if (vm == NULL) {
+void mmu_init(VM *vm){
+    if (vm == NULL){
         return;
     }
 
@@ -13,14 +13,14 @@ void mmu_init(VM *vm) {
 
     // Inicializar tabla de descriptores de segmentos:
     // Las 8 entradas quedan sin utilizar con el valor -1 (0xFFFF en base y tamaño)
-    for (int i = 0; i < NUM_SEGMENTS; i++) {
+    for (int i = 0; i < NUM_SEGMENTS; i++){
         vm->segments[i].base = 0xFFFF;
         vm->segments[i].size = 0xFFFF;
     }
 }
 
 bool mmu_logical_to_physical(const VM *vm, uint32_t logical_addr, uint8_t access_size, uint16_t *physical_addr) {
-    if (vm == NULL || physical_addr == NULL) {
+    if (vm == NULL || physical_addr == NULL){
         return false;
     }
 
@@ -31,27 +31,27 @@ bool mmu_logical_to_physical(const VM *vm, uint32_t logical_addr, uint8_t access
     uint16_t offset = (uint16_t)(logical_addr & 0xFFFF);
 
     // Valida que el indice no supere la cantidad de segmentos (0 a 7)
-    if (segment_base_dir >= NUM_SEGMENTS) {
+    if (segment_base_dir >= NUM_SEGMENTS){
         return false;
     }
 
     const SegmentDescriptor *seg = &vm->segments[segment_base_dir]; 
 
     // Valida si el segmento esta sin utilizar (0xFFFF = -1)
-    if (seg->base == 0xFFFF && seg->size == 0xFFFF) {
+    if (seg->base == 0xFFFF && seg->size == 0xFFFF){
         return false;
     }
 
     // Validar limites del segmento: offset + access_size <= tamaño del segmento
 
     // Es lo mismo que (Base+Offset)+acces_size > Base + Tamaño   (Desbordamiento)
-    if (access_size == 0 || (uint32_t)offset + access_size > seg->size) {
+    if (access_size == 0 || (uint32_t)offset + access_size > seg->size){
         return false;
     }
 
     // Validar que la direccion fisica calculada no sobrepase la RAM 
     uint32_t phys = (uint32_t)seg->base + offset;
-    if (phys + access_size > RAM_SIZE) {
+    if (phys + access_size > RAM_SIZE){
         return false;
     }
 
@@ -59,8 +59,8 @@ bool mmu_logical_to_physical(const VM *vm, uint32_t logical_addr, uint8_t access
     return true;
 }
 
-uint32_t mem_read(VM *vm, uint32_t logical_addr, uint8_t size) {
-    if (vm == NULL) {
+uint32_t mem_read(VM *vm, uint32_t logical_addr, uint8_t size){
+    if (vm == NULL){
         fprintf(stderr, "Fallo de segmento\n");
         exit(1); // Se termino el programa debido a un error
     }
@@ -82,11 +82,11 @@ uint32_t mem_read(VM *vm, uint32_t logical_addr, uint8_t size) {
 
     //Lectura de los bytes de la RAM 
     uint32_t val = 0;
-    if (size == 1) {
+    if (size == 1){
         val = (uint32_t)vm->memory[physical_addr];
-    } else if (size == 2) {
+    } else if (size == 2){
         val = ((uint32_t)vm->memory[physical_addr] << 8) |  (uint32_t)vm->memory[physical_addr + 1];
-    } else if (size == 4) {
+    } else if (size == 4){
         val = ((uint32_t)vm->memory[physical_addr] << 24) |
               ((uint32_t)vm->memory[physical_addr + 1] << 16) |
               ((uint32_t)vm->memory[physical_addr + 2] << 8) |
@@ -103,7 +103,7 @@ uint32_t mem_read(VM *vm, uint32_t logical_addr, uint8_t size) {
 }
 
 void mem_write(VM *vm, uint32_t logical_addr, uint32_t value, uint8_t size) {
-    if (vm == NULL) {
+    if (vm == NULL){
         fprintf(stderr, "Fallo de segmento\n");
         exit(1);
     }
@@ -126,17 +126,17 @@ void mem_write(VM *vm, uint32_t logical_addr, uint32_t value, uint8_t size) {
     vm->registers[REG_MAR] |= (int32_t)physical_addr;
 
     // Escritura en memoria 
-    if (size == 1) {
+    if (size == 1){
         vm->memory[physical_addr] = (uint8_t)(value & 0xFF);
-    } else if (size == 2) {
+    } else if (size == 2){
         vm->memory[physical_addr]     = (uint8_t)((value >> 8) & 0xFF);
         vm->memory[physical_addr + 1] = (uint8_t)(value & 0xFF);
-    } else if (size == 4) {
+    } else if (size == 4){
         vm->memory[physical_addr]     = (uint8_t)((value >> 24) & 0xFF);
         vm->memory[physical_addr + 1] = (uint8_t)((value >> 16) & 0xFF);
         vm->memory[physical_addr + 2] = (uint8_t)((value >> 8) & 0xFF);
         vm->memory[physical_addr + 3] = (uint8_t)(value & 0xFF);
-    } else {
+    } else{
         fprintf(stderr, "Fallo de segmento\n");
         exit(1);
     }
