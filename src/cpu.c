@@ -24,18 +24,25 @@ void cpu_update_flags(VM *vm, int64_t result, int32_t op_a, int32_t op_b, bool i
 
     // C: bit 29 (acarreo / carry / borrow)
     if (is_sub) {
-        // En resta, carry se activa si hay prestamo (op_a < op_b como sin signo o res < 0)
+        // En resta / CMP: carry si el resultado es negativo o requirio prestamo
         if (result < 0 || (uint32_t)op_a < (uint32_t)op_b)
             cc |= (1 << 29);
-    } else {
-        // En suma/mult/etc, se activa si el resultado excede 32 bits sin signo
-        if ((uint64_t)result > 0xFFFFFFFFULL)
+    } else if (op_b != 0) {
+        // En suma / MUL: carry si excede capacidad sin signo
+        uint64_t u_sum = (uint64_t)(uint32_t)op_a + (uint64_t)(uint32_t)op_b;
+        if (u_sum > 0xFFFFFFFFULL || (uint64_t)result > 0xFFFFFFFFULL)
             cc |= (1 << 29);
     }
 
-    // V: bit 28 (desbordamiento con signo en complemento a 2)
-    if (result < -2147483648LL || result > 2147483647LL) {
-        cc |= (1 << 28);
+    // V: bit 28 (desbordamiento con signo)
+    if (is_sub) {
+        if (((op_a ^ op_b) & 0x80000000) && ((op_a ^ truncated) & 0x80000000))
+            cc |= (1 << 28);
+    } else if (op_b != 0) {
+        if (result < -2147483648LL || result > 2147483647LL ||
+            (!((op_a ^ op_b) & 0x80000000) && ((op_a ^ truncated) & 0x80000000))) {
+            cc |= (1 << 28);
+        }
     }
 
     vm->registers[REG_CC] = cc;
