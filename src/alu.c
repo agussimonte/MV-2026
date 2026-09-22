@@ -269,16 +269,26 @@ void inst_jnz(VM *vm, const Instruction *inst) {
         vm->registers[REG_IP] = get_value[inst->type_a](vm, inst->reg_a, inst->val_a);
 }
 
-// SYS (0x00): llamadas al sistema
-void inst_sys(VM *vm, const Instruction *inst) {
-    (void)inst;
+// Funcion auxiliar para imprimir en binario
+static void print_binary(uint32_t val, uint16_t cell_size) {
+    int bits = cell_size * 8;
+    for (int i = bits - 1; i >= 0; i--) {
+        putchar((val & (1U << i)) ? '1' : '0');
+    }
+}
 
-    int32_t mode = vm->registers[REG_EAX];
+// SYS (0x00): llamadas al sistema
+// Operando A (inst): 1 = READ, 2 = WRITE
+// EAX: formato (bit 0: dec, bit 1: char, bit 2: oct, bit 3: hex, bit 4: bin)
+// EDX: direccion logica inicial
+// ECX: 16 bits bajos = cantidad de celdas, 16 bits altos = tamano de celda
+void inst_sys(VM *vm, const Instruction *inst) {
+    int32_t syscall_op = get_value[inst->type_a](vm, inst->reg_a, inst->val_a);
+    int32_t format = vm->registers[REG_EAX];
     uint32_t base_addr = (uint32_t)vm->registers[REG_EDX];
     uint16_t count = (uint16_t)(vm->registers[REG_ECX] & 0xFFFF);
     uint16_t cell_size = (uint16_t)((vm->registers[REG_ECX] >> 16) & 0xFFFF);
 
-    // Si el tamano de celda no fue especificado, por defecto es 4 bytes
     if (cell_size != 1 && cell_size != 2 && cell_size != 4) {
         cell_size = 4;
     }
@@ -296,17 +306,62 @@ void inst_sys(VM *vm, const Instruction *inst) {
             exit(1);
         }
 
-        if (mode == 1) {
+        if (syscall_op == 1) {
+            // READ: leer del teclado hacia la memoria
             printf("[%04X]: ", phys);
+            fflush(stdout);
+
             int32_t input = 0;
-            if (scanf("%d", &input) != 1) {
-                input = 0;
+            if (format & 0x02) {
+                // Caracter
+                char c = 0;
+                if (scanf(" %c", &c) == 1) {
+                    input = (uint8_t)c;
+                }
+            } else if (format & 0x04) {
+                // Octal
+                unsigned int oct = 0;
+                if (scanf("%o", &oct) == 1) {
+                    input = (int32_t)oct;
+                }
+            } else if (format & 0x08) {
+                // Hexadecimal
+                unsigned int hex = 0;
+                if (scanf("%x", &hex) == 1) {
+                    input = (int32_t)hex;
+                }
+            } else if (format & 0x10) {
+                // Binario: lee cadena de 0 y 1
+                char bin_str[35];
+                if (scanf("%34s", bin_str) == 1) {
+                    input = (int32_t)strtol(bin_str, NULL, 2);
+                }
+            } else {
+                // Decimal por defecto (bit 0 o si no coincide ninguno)
+                if (scanf("%d", &input) != 1) {
+                    input = 0;
+                }
             }
             mem_write(vm, logical, (uint32_t)input, cell_size);
 
-        } else if (mode == 2) {
+        } else if (syscall_op == 2) {
+            // WRITE: mostrar de la memoria hacia la pantalla
             uint32_t val = mem_read(vm, logical, cell_size);
-            printf("[%04X]: %d\n", phys, (int32_t)val);
+            printf("[%04X]: ", phys);
+
+            if (format & 0x02) {
+                printf("%c\n", (char)(val & 0xFF));
+            } else if (format & 0x04) {
+                printf("%o\n", val);
+            } else if (format & 0x08) {
+                printf("%X\n", val);
+            } else if (format & 0x10) {
+                print_binary(val, cell_size);
+                printf("\n");
+            } else {
+                // Decimal
+                printf("%d\n", (int32_t)val);
+            }
         }
     }
 }
