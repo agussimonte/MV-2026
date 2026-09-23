@@ -58,7 +58,7 @@ Instruction decode_instruction(const VM *vm, uint16_t physical_addr){
             uint8_t b2 = vm->memory[physical_addr + offset + 1];
             inst.reg_b = 0;
             inst.val_b = (int16_t)(((uint16_t)b1 << 8) | b2); // Valor con signo
-            inst.raw_op_b = ((int32_t)inst.type_b << 24) | ((int32_t)b1 << 8) | b2;
+            inst.raw_op_b = ((int32_t)inst.type_b << 24) | ((int32_t)b1 << 8) | b2; //inst.raw_op_b = ((int32_t)inst.type_b << 24) || (int32_t)inst.val_b
             offset += 2;
         }
         else if(inst.type_b == OP_MEM){
@@ -78,7 +78,7 @@ Instruction decode_instruction(const VM *vm, uint16_t physical_addr){
             uint8_t byte_reg = vm->memory[physical_addr+offset];
             inst.reg_a = byte_reg & 0x1F; //cod 0..31
             inst.val_a = 0;
-            inst.raw_op_a = (inst.type_a << 24) | byte_reg;
+            inst.raw_op_a = (inst.type_a << 24) | byte_reg; // tipo de op 8 bits y valor en parte baja 24 bits
 
             offset+=1;
         }
