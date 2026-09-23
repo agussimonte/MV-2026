@@ -309,7 +309,6 @@ void inst_sys(VM *vm, const Instruction *inst) {
         if (syscall_op == 1) {
             // READ: leer del teclado hacia la memoria
             printf("[%04X]: ", phys);
-            fflush(stdout);
 
             int32_t input = 0;
             if (format & 0x02) {
