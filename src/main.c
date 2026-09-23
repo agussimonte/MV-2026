@@ -39,7 +39,7 @@ int main(int argc, char *argv[]) {
 
     // Modo desensamblado (-d) o ejecucion normal
     if (disasm_flag) {
-        printf("Modo desensamblador pendiente de implementacion.\n");
+        disasm_all(&vm));
     } else {
         cpu_init();
         cpu_run(&vm);
