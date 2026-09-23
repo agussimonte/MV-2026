@@ -4,6 +4,7 @@
 #include "vm_types.h"
 #include "loader.h"
 #include "cpu.h"
+#include "disasm.h"
 
 int main(int argc, char *argv[]) {
     if (argc < 2) {
@@ -39,7 +40,7 @@ int main(int argc, char *argv[]) {
 
     // Modo desensamblado (-d) o ejecucion normal
     if (disasm_flag) {
-        disasm_all(&vm));
+        disasm_all(&vm);
     } else {
         cpu_init();
         cpu_run(&vm);
