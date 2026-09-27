@@ -1,4 +1,4 @@
-#include <stdio.h>
+﻿#include <stdio.h>
 #include <stdlib.h>
 #include "alu.h"
 #include "cpu.h"
@@ -103,7 +103,7 @@ void inst_div(VM *vm, const Instruction *inst) {
     int32_t b = get_value[inst->type_b](vm, inst->reg_b, inst->val_b);
 
     if (b == 0) {
-        fprintf(stderr, "División por cero\n");
+        fprintf(stderr, "Division por cero\n");
         exit(1);
     }
 
@@ -281,7 +281,7 @@ static void print_binary(uint32_t val, uint16_t cell_size) {
 // Operando A (inst): 1 = READ, 2 = WRITE
 // EAX: formato (bit 0: dec, bit 1: char, bit 2: oct, bit 3: hex, bit 4: bin)
 // EDX: direccion logica inicial
-// ECX: 16 bits bajos = cantidad de celdas, 16 bits altos = tamano de celda
+// ECX: 16 bits bajos = cantidad de celdas, 16 bits altos = tamaño de celda
 void inst_sys(VM *vm, const Instruction *inst) {
     int32_t syscall_op = get_value[inst->type_a](vm, inst->reg_a, inst->val_a);
     int32_t format = vm->registers[REG_EAX];

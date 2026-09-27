@@ -1,4 +1,4 @@
-#include <stdio.h>
+﻿#include <stdio.h>
 #include <string.h>
 #include "loader.h"
 #include "mmu.h"
@@ -18,7 +18,7 @@ int load_vmx(VM *vm, const char *filepath) {
         
         // Bytes 0-4: "VMX26"
         // Byte 5: Version (1)
-        // Bytes 6-7: Tamano del codigo (Big-Endian)
+        // Bytes 6-7: tamaño del codigo (Big-Endian)
         
         uint8_t header[8]; // Cabecera: 8 bytes
         size_t bytes_read;
@@ -46,7 +46,7 @@ int load_vmx(VM *vm, const char *filepath) {
         //header[6] tiene la parte alta y header[7] la parte baja, desplazamos 6 hacia la izquierda
         //hacemos un or con 7 para tener el tamaño del codigo
         if (code_size > RAM_SIZE) {
-            fprintf(stderr, "Error: El tamano del codigo (%u bytes) excede la memoria principal (%d bytes).\n",
+            fprintf(stderr, "Error: El tamaño del codigo (%u bytes) excede la memoria principal (%d bytes).\n",
                     code_size, RAM_SIZE);
             fclose(file);
             return 0;

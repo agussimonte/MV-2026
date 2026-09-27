@@ -1,4 +1,4 @@
-#ifndef ALU_H
+﻿#ifndef ALU_H
 #define ALU_H
 
 #include "vm_types.h"

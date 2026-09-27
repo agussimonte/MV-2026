@@ -1,4 +1,4 @@
-#include <stdio.h>
+﻿#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include "decoder.h"
@@ -45,6 +45,7 @@ Instruction decode_instruction(const VM *vm, uint16_t physical_addr){
 
     if(inst.num_operands == 2){
         if(inst.type_b == OP_REG){
+            if (physical_addr + offset >= RAM_SIZE) { fprintf(stderr, "Fallo de segmento\n"); exit(1); }
             uint8_t byte_reg = vm->memory[physical_addr+offset];
             inst.reg_b = byte_reg & 0x1F; //cod 0..31
             inst.val_b = 0;
@@ -53,6 +54,7 @@ Instruction decode_instruction(const VM *vm, uint16_t physical_addr){
             offset+=1;
         }
         else if(inst.type_b == OP_IMM){
+            if (physical_addr + offset + 1 >= RAM_SIZE) { fprintf(stderr, "Fallo de segmento\n"); exit(1); }
             uint8_t b1 = vm->memory[physical_addr + offset]; 
             //Necesito b1yb2 porque los inmediatos son de 16bits
             uint8_t b2 = vm->memory[physical_addr + offset + 1];
@@ -62,6 +64,7 @@ Instruction decode_instruction(const VM *vm, uint16_t physical_addr){
             offset += 2;
         }
         else if(inst.type_b == OP_MEM){
+            if (physical_addr + offset + 2 >= RAM_SIZE) { fprintf(stderr, "Fallo de segmento\n"); exit(1); }
             uint8_t b1 = vm->memory[physical_addr + offset];
             uint8_t b2 = vm->memory[physical_addr + offset + 1];
             uint8_t b3 = vm->memory[physical_addr + offset + 2];
@@ -75,6 +78,7 @@ Instruction decode_instruction(const VM *vm, uint16_t physical_addr){
     }
     if (inst.num_operands >= 1){
         if(inst.type_a == OP_REG){
+            if (physical_addr + offset >= RAM_SIZE) { fprintf(stderr, "Fallo de segmento\n"); exit(1); }
             uint8_t byte_reg = vm->memory[physical_addr+offset];
             inst.reg_a = byte_reg & 0x1F; //cod 0..31
             inst.val_a = 0;
@@ -83,6 +87,7 @@ Instruction decode_instruction(const VM *vm, uint16_t physical_addr){
             offset+=1;
         }
         else if(inst.type_a == OP_IMM){
+            if (physical_addr + offset + 1 >= RAM_SIZE) { fprintf(stderr, "Fallo de segmento\n"); exit(1); }
             uint8_t b1 = vm->memory[physical_addr + offset]; 
             //Necesito b1yb2 porque los inmediatos son de 16bits
             uint8_t b2 = vm->memory[physical_addr + offset + 1];
@@ -92,6 +97,7 @@ Instruction decode_instruction(const VM *vm, uint16_t physical_addr){
             offset += 2;
         }
         else if(inst.type_a == OP_MEM){
+            if (physical_addr + offset + 2 >= RAM_SIZE) { fprintf(stderr, "Fallo de segmento\n"); exit(1); }
             uint8_t b1 = vm->memory[physical_addr + offset];
             uint8_t b2 = vm->memory[physical_addr + offset + 1];
             uint8_t b3 = vm->memory[physical_addr + offset + 2];

@@ -1,4 +1,4 @@
-#include <stdio.h>
+﻿#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include "mmu.h"
@@ -25,7 +25,7 @@ bool mmu_logical_to_physical(const VM *vm, uint32_t logical_addr, uint8_t access
     }
 
     // Descomponer la direccion logica:
-    // 16 bits más significativos: indice de segmento en la tabla de descriptores
+    // 16 bits mas significativos: indice de segmento en la tabla de descriptores
     // 16 bits menos significativos: desplazamiento (offset) dentro del segmento
     uint16_t segment_base_dir = (uint16_t)((logical_addr >> 16) & 0xFFFF);
     uint16_t offset = (uint16_t)(logical_addr & 0xFFFF);
@@ -44,7 +44,7 @@ bool mmu_logical_to_physical(const VM *vm, uint32_t logical_addr, uint8_t access
 
     // Validar limites del segmento: offset + access_size <= tamaño del segmento
 
-    // Es lo mismo que (Base+Offset)+acces_size > Base + Tamaño   (Desbordamiento)
+    // Es lo mismo que (Base+Offset)+acces_size > Base + tamaño   (Desbordamiento)
     if (access_size == 0 || (uint32_t)offset + access_size > seg->size){
         return false;
     }

@@ -1,4 +1,4 @@
-#include <stdio.h>
+﻿#include <stdio.h>
 #include <string.h>
 #include "disasm.h"
 #include "decoder.h"
@@ -65,7 +65,7 @@ void disasm_print_instruction(const VM *vm, uint16_t physical_addr, const Instru
         return;
     }
 
-    // 1.Imprime la direccion física de 4 dígitos hexadecimales: [XXXX]
+    // 1.Imprime la direccion fisica de 4 digitos hexadecimales: [XXXX]
     printf("[%04X] ", physical_addr);
 
     // 2.Imprime los bytes hexadecimales de la instruccion completa

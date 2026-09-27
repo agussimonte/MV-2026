@@ -1,4 +1,4 @@
-#include <stdio.h>
+﻿#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include "cpu.h"
@@ -107,7 +107,7 @@ void cpu_step(VM *vm) {
 
     // Validar opcode y despachar
     if (inst.opcode > 0x1F || dispatch_table[inst.opcode] == NULL) {
-        fprintf(stderr, "Instrucción inválida\n");
+        fprintf(stderr, "Instruccion invalida\n");
         exit(1);
     }
 
