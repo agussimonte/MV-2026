@@ -1,6 +1,7 @@
 # MV-2026
 
 Máquina Virtual - TP Arquitectura de Computadoras 
+**Integrantes:** Nicolas Cano - Agustin Simonte Del Russo
 
 ## Requisitos
 
