@@ -2,6 +2,8 @@
 
 Máquina Virtual - TP Arquitectura de Computadoras (6203-681)
 
+**Integrantes:** Nicolas Cano - Agustin Simonte Del Russo
+
 ## Requisitos
 
 - gcc
