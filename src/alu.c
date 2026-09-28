@@ -1,4 +1,4 @@
-﻿#include <stdio.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include "alu.h"
 #include "cpu.h"
@@ -108,6 +108,7 @@ void inst_div(VM *vm, const Instruction *inst) {
     }
 
     int64_t res = (int64_t)a / (int64_t)b;
+    vm->registers[REG_AC] = (int32_t)((int64_t)a % (int64_t)b);
     set_value[inst->type_a](vm, inst->reg_a, inst->val_a, (int32_t)res);
     cpu_update_flags(vm, res, a, b, false);
 }
@@ -306,6 +307,7 @@ void inst_sys(VM *vm, const Instruction *inst) {
             exit(1);
         }
 
+
         if (syscall_op == 1) {
             // READ: leer del teclado hacia la memoria
             printf("[%04X]: ", phys);
@@ -341,6 +343,7 @@ void inst_sys(VM *vm, const Instruction *inst) {
                     input = 0;
                 }
             }
+            // Escribo en memoria
             mem_write(vm, logical, (uint32_t)input, cell_size);
 
         } else if (syscall_op == 2) {
@@ -349,18 +352,20 @@ void inst_sys(VM *vm, const Instruction *inst) {
             printf("[%04X]: ", phys);
 
             if (format & 0x02) {
-                printf("%c\n", (char)(val & 0xFF));
-            } else if (format & 0x04) {
-                printf("%o\n", val);
-            } else if (format & 0x08) {
-                printf("%X\n", val);
-            } else if (format & 0x10) {
+                printf("%c\t", (char)(val & 0xFF));
+            } if (format & 0x04) {
+                printf("0o%o\t", val);
+            } if (format & 0x08) {
+                printf("0x%X\t", val);
+            } if (format & 0x10) {
+                printf("0b");
                 print_binary(val, cell_size);
-                printf("\n");
-            } else {
+                printf("\t");
+            } if (format & 0x01){
                 // Decimal
-                printf("%d\n", (int32_t)val);
+                printf("%d\t", (int32_t)val);
             }
+            printf("\n");
         }
     }
 }
