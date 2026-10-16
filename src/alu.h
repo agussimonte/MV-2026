@@ -1,10 +1,11 @@
-﻿#ifndef ALU_H
+#ifndef ALU_H
 #define ALU_H
 
 #include "vm_types.h"
 
 // Instrucciones de control / sin operando
 void inst_stop(VM *vm, const Instruction *inst);
+void inst_ret(VM *vm, const Instruction *inst);
 
 // Instrucciones de 1 operando
 void inst_sys(VM *vm, const Instruction *inst);
@@ -18,6 +19,9 @@ void inst_jnp(VM *vm, const Instruction *inst);
 void inst_jnn(VM *vm, const Instruction *inst);
 void inst_jnz(VM *vm, const Instruction *inst);
 void inst_not(VM *vm, const Instruction *inst);
+void inst_push(VM *vm, const Instruction *inst);
+void inst_pop(VM *vm, const Instruction *inst);
+void inst_call(VM *vm, const Instruction *inst);
 
 // Instrucciones de 2 operandos (ALU / transferencia)
 void inst_mov(VM *vm, const Instruction *inst);
@@ -38,4 +42,3 @@ void inst_ldh(VM *vm, const Instruction *inst);
 void inst_rnd(VM *vm, const Instruction *inst);
 
 #endif // ALU_H
-
