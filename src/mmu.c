@@ -8,8 +8,10 @@ void mmu_init(VM *vm){
         return;
     }
 
-    // Inicializar memoria fisica en cero
-    memset(vm->memory, 0, sizeof(vm->memory));
+    //inicializa memoria fisica en cero
+    if (vm->memory != NULL && vm->ram_size > 0) {
+        memset(vm->memory, 0, vm->ram_size); //limpia la cantidad exacta pedida 
+    }
 
     // Inicializar tabla de descriptores de segmentos:
     // Las 8 entradas quedan sin utilizar con el valor -1 (0xFFFF en base y tamaño)
@@ -51,7 +53,7 @@ bool mmu_logical_to_physical(const VM *vm, uint32_t logical_addr, uint8_t access
 
     // Validar que la direccion fisica calculada no sobrepase la RAM 
     uint32_t phys = (uint32_t)seg->base + offset;
-    if (phys + access_size > RAM_SIZE){
+    if (phys + access_size > vm->ram_size){ //ahora validamos con el tamaño pedido, antes era el fijo de 16Kib
         return false;
     }
 
