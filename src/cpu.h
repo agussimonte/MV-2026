@@ -1,4 +1,4 @@
-﻿#ifndef CPU_H
+#ifndef CPU_H
 #define CPU_H
 
 #include "vm_types.h"
@@ -17,5 +17,8 @@ void cpu_run(VM *vm);
 
 // Utilidades para consultar y encender/apagar los 4 bits altos del registro CC (N, Z, C, V)
 void cpu_update_flags(VM *vm, int64_t result, int32_t op_a, int32_t op_b, bool is_sub);
+
+// Inicializa SP y carga el frame inicial en la pila (RET=-1, argc, argv)
+void cpu_init_stack(VM *vm, int argc, uint32_t argv_ptr);
 
 #endif // CPU_H

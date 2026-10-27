@@ -311,6 +311,69 @@ void inst_jnz(VM *vm, const Instruction *inst) {
         vm->registers[REG_IP] = get_op_a(vm, inst);
 }
 
+// Limite superior de la pila (SS + tamano de segmento)
+static uint32_t get_stack_max(const VM *vm) {
+    uint16_t ss_index = (uint16_t)(((uint32_t)vm->registers[REG_SS] >> 16) & 0xFFFF);
+    if (ss_index >= NUM_SEGMENTS || vm->segments[ss_index].base == 0xFFFF) {
+        return (uint32_t)vm->registers[REG_SS];
+    }
+    return (uint32_t)vm->registers[REG_SS] + vm->segments[ss_index].size;
+}
+
+// PUSH (0x0B): apilar dato de 4 bytes
+void inst_push(VM *vm, const Instruction *inst) {
+    vm->registers[REG_SP] -= 4;
+    if ((uint32_t)vm->registers[REG_SP] < (uint32_t)vm->registers[REG_SS]) {
+        fprintf(stderr, "Stack overflow\n");
+        exit(1);
+    }
+    int32_t val = get_op_a(vm, inst);
+    mem_write(vm, (uint32_t)vm->registers[REG_SP], (uint32_t)val, 4);
+}
+
+// POP (0x0C): desapilar dato de 4 bytes
+void inst_pop(VM *vm, const Instruction *inst) {
+    uint32_t sp_max = get_stack_max(vm);
+    if ((uint32_t)vm->registers[REG_SP] + 4 > sp_max) {
+        fprintf(stderr, "Stack underflow\n");
+        exit(1);
+    }
+    uint32_t val = mem_read(vm, (uint32_t)vm->registers[REG_SP], 4);
+    set_op_a(vm, inst, (int32_t)val);
+    vm->registers[REG_SP] += 4;
+}
+
+// CALL (0x0D): llamada a subrutina (PUSH IP y salto a CS + operando)
+void inst_call(VM *vm, const Instruction *inst) {
+    vm->registers[REG_SP] -= 4;
+    if ((uint32_t)vm->registers[REG_SP] < (uint32_t)vm->registers[REG_SS]) {
+        fprintf(stderr, "Stack overflow\n");
+        exit(1);
+    }
+    mem_write(vm, (uint32_t)vm->registers[REG_SP], (uint32_t)vm->registers[REG_IP], 4);
+
+    int32_t target = get_op_a(vm, inst);
+    uint32_t cs_segment = (uint32_t)vm->registers[REG_CS] & 0xFFFF0000;
+    vm->registers[REG_IP] = (int32_t)(cs_segment | ((uint32_t)target & 0x0000FFFF));
+}
+
+// RET (0x0E): retorno de subrutina (POP IP)
+void inst_ret(VM *vm, const Instruction *inst) {
+    (void)inst;
+    uint32_t sp_max = get_stack_max(vm);
+    if ((uint32_t)vm->registers[REG_SP] + 4 > sp_max) {
+        fprintf(stderr, "Stack underflow\n");
+        exit(1);
+    }
+    uint32_t ret_ip = mem_read(vm, (uint32_t)vm->registers[REG_SP], 4);
+    vm->registers[REG_SP] += 4;
+    vm->registers[REG_IP] = (int32_t)ret_ip;
+
+    if (ret_ip == 0xFFFFFFFF) {
+        vm->running = false;
+    }
+}
+
 // Funcion auxiliar para imprimir en binario
 static void print_binary(uint32_t val, uint16_t cell_size) {
     int bits = cell_size * 8;
