@@ -14,4 +14,6 @@ vmx
 *.swo
 
 # Documentación y enunciados locales
+*.vmx
+vmt
 
