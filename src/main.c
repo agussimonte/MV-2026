@@ -1,4 +1,4 @@
-﻿#include <stdio.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdbool.h> 
@@ -102,6 +102,9 @@ int main(int argc, char *argv[]){
             disasm_all(&vm);
         }else{
             cpu_init();
+            uint32_t argv_ptr = 0xFFFFFFFF; // Por defecto si no hay params
+            (void)param_values;              // Silenciar warning hasta que se arme el Param Segment
+            cpu_init_stack(&vm, param_count, argv_ptr);
             cpu_run(&vm);
         }
     }else{

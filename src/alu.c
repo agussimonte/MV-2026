@@ -4,57 +4,98 @@
 #include "cpu.h"
 #include "mmu.h"
 
-// Punteros a funcion para acceso a operandos
-typedef int32_t (*GetOperandFn)(VM *vm, uint8_t reg, int16_t val);
-typedef void (*SetOperandFn)(VM *vm, uint8_t reg, int16_t val, int32_t result);
-
-static int32_t get_none(VM *vm, uint8_t reg, int16_t val) {
-    (void)vm; (void)reg; (void)val;
-    return 0;
+// Acceso a operandos: lectura con soporte de subregistros y modificadores de tamaño
+static int32_t get_operand(VM *vm, OperandType type, uint8_t reg, int16_t val, uint8_t sector, uint8_t mem_size) {
+    switch (type) {
+        case OP_REG: {
+            int32_t r = vm->registers[reg];
+            switch (sector) {
+                case REG_SECTOR_L: // 4to byte / LSB (AL..FL)
+                    return (int32_t)(int8_t)(r & 0xFF);
+                case REG_SECTOR_H: // 3er byte / byte alto de AX (AH..FH)
+                    return (int32_t)(int8_t)((r >> 8) & 0xFF);
+                case REG_SECTOR_X: // 2 bytes menos significativos (AX..FX)
+                    return (int32_t)(int16_t)(r & 0xFFFF);
+                case REG_SECTOR_FULL:
+                default:
+                    return r;
+            }
+        }
+        case OP_IMM:
+            return (int32_t)val;
+        case OP_MEM: {
+            uint32_t base = (uint32_t)vm->registers[reg];
+            uint32_t segment = base & 0xFFFF0000;
+            uint32_t offset = (base & 0x0000FFFF) + (int32_t)val;
+            uint32_t logical = segment | (offset & 0xFFFF);
+            uint8_t size = (mem_size == 1 || mem_size == 2 || mem_size == 4) ? mem_size : 4;
+            uint32_t raw = mem_read(vm, logical, size);
+            if (size == 1) {
+                return (int32_t)(int8_t)(raw & 0xFF);
+            } else if (size == 2) {
+                return (int32_t)(int16_t)(raw & 0xFFFF);
+            } else {
+                return (int32_t)raw;
+            }
+        }
+        case OP_NONE:
+        default:
+            return 0;
+    }
 }
 
-static int32_t get_reg(VM *vm, uint8_t reg, int16_t val) {
-    (void)val;
-    return vm->registers[reg];
+// Acceso a operandos: escritura con soporte de subregistros y modificadores de tamaño
+static void set_operand(VM *vm, OperandType type, uint8_t reg, int16_t val, uint8_t sector, uint8_t mem_size, int32_t result) {
+    switch (type) {
+        case OP_REG: {
+            switch (sector) {
+                case REG_SECTOR_L: // Modifica solo el 4to byte (bits 0..7)
+                    vm->registers[reg] = (int32_t)((vm->registers[reg] & ~0x000000FF) | (result & 0xFF));
+                    break;
+                case REG_SECTOR_H: // Modifica solo el 3er byte (bits 8..15)
+                    vm->registers[reg] = (int32_t)((vm->registers[reg] & ~0x0000FF00) | ((result & 0xFF) << 8));
+                    break;
+                case REG_SECTOR_X: // Modifica solo los 2 bytes menos significativos (bits 0..15)
+                    vm->registers[reg] = (int32_t)((vm->registers[reg] & ~0x0000FFFF) | (result & 0xFFFF));
+                    break;
+                case REG_SECTOR_FULL:
+                default:
+                    vm->registers[reg] = result;
+                    break;
+            }
+            break;
+        }
+        case OP_MEM: {
+            uint32_t base = (uint32_t)vm->registers[reg];
+            uint32_t segment = base & 0xFFFF0000;
+            uint32_t offset = (base & 0x0000FFFF) + (int32_t)val;
+            uint32_t logical = segment | (offset & 0xFFFF);
+            uint8_t size = (mem_size == 1 || mem_size == 2 || mem_size == 4) ? mem_size : 4;
+            mem_write(vm, logical, (uint32_t)result, size);
+            break;
+        }
+        case OP_IMM:
+        case OP_NONE:
+        default:
+            break;
+    }
 }
 
-static int32_t get_imm(VM *vm, uint8_t reg, int16_t val) {
-    (void)vm; (void)reg;
-    return (int32_t)val;
+static inline int32_t get_op_a(VM *vm, const Instruction *inst) {
+    return get_operand(vm, inst->type_a, inst->reg_a, inst->val_a, inst->sector_a, inst->mem_size_a);
 }
 
-static int32_t get_mem(VM *vm, uint8_t reg, int16_t val) {
-    uint32_t base = (uint32_t)vm->registers[reg];
-    uint32_t segment = base & 0xFFFF0000;
-    uint32_t offset = (base & 0x0000FFFF) + (int32_t)val;
-    uint32_t logical = segment | (offset & 0xFFFF);
-    return (int32_t)mem_read(vm, logical, 4);
+static inline int32_t get_op_b(VM *vm, const Instruction *inst) {
+    return get_operand(vm, inst->type_b, inst->reg_b, inst->val_b, inst->sector_b, inst->mem_size_b);
 }
 
-static GetOperandFn get_value[] = { get_none, get_reg, get_imm, get_mem };
-
-static void set_none(VM *vm, uint8_t reg, int16_t val, int32_t result) {
-    (void)vm; (void)reg; (void)val; (void)result;
+static inline void set_op_a(VM *vm, const Instruction *inst, int32_t result) {
+    set_operand(vm, inst->type_a, inst->reg_a, inst->val_a, inst->sector_a, inst->mem_size_a, result);
 }
 
-static void set_reg(VM *vm, uint8_t reg, int16_t val, int32_t result) {
-    (void)val;
-    vm->registers[reg] = result;
+static inline void set_op_b(VM *vm, const Instruction *inst, int32_t result) {
+    set_operand(vm, inst->type_b, inst->reg_b, inst->val_b, inst->sector_b, inst->mem_size_b, result);
 }
-
-static void set_imm(VM *vm, uint8_t reg, int16_t val, int32_t result) {
-    (void)vm; (void)reg; (void)val; (void)result;
-}
-
-static void set_mem(VM *vm, uint8_t reg, int16_t val, int32_t result) {
-    uint32_t base = (uint32_t)vm->registers[reg];
-    uint32_t segment = base & 0xFFFF0000;
-    uint32_t offset = (base & 0x0000FFFF) + (int32_t)val;
-    uint32_t logical = segment | (offset & 0xFFFF);
-    mem_write(vm, logical, (uint32_t)result, 4);
-}
-
-static SetOperandFn set_value[] = { set_none, set_reg, set_imm, set_mem };
 
 // STOP (0x0F)
 void inst_stop(VM *vm, const Instruction *inst) {
@@ -65,42 +106,42 @@ void inst_stop(VM *vm, const Instruction *inst) {
 
 // MOV (0x10): A = B
 void inst_mov(VM *vm, const Instruction *inst) {
-    int32_t b = get_value[inst->type_b](vm, inst->reg_b, inst->val_b);
-    set_value[inst->type_a](vm, inst->reg_a, inst->val_a, b);
+    int32_t b = get_op_b(vm, inst);
+    set_op_a(vm, inst, b);
     cpu_update_flags(vm, (int64_t)b, b, 0, false);
 }
 
 // ADD (0x11): A = A + B
 void inst_add(VM *vm, const Instruction *inst) {
-    int32_t a = get_value[inst->type_a](vm, inst->reg_a, inst->val_a);
-    int32_t b = get_value[inst->type_b](vm, inst->reg_b, inst->val_b);
+    int32_t a = get_op_a(vm, inst);
+    int32_t b = get_op_b(vm, inst);
     int64_t res = (int64_t)a + (int64_t)b;
-    set_value[inst->type_a](vm, inst->reg_a, inst->val_a, (int32_t)res);
+    set_op_a(vm, inst, (int32_t)res);
     cpu_update_flags(vm, res, a, b, false);
 }
 
 // SUB (0x12): A = A - B
 void inst_sub(VM *vm, const Instruction *inst) {
-    int32_t a = get_value[inst->type_a](vm, inst->reg_a, inst->val_a);
-    int32_t b = get_value[inst->type_b](vm, inst->reg_b, inst->val_b);
+    int32_t a = get_op_a(vm, inst);
+    int32_t b = get_op_b(vm, inst);
     int64_t res = (int64_t)a - (int64_t)b;
-    set_value[inst->type_a](vm, inst->reg_a, inst->val_a, (int32_t)res);
+    set_op_a(vm, inst, (int32_t)res);
     cpu_update_flags(vm, res, a, b, true);
 }
 
 // MUL (0x13): A = A * B
 void inst_mul(VM *vm, const Instruction *inst) {
-    int32_t a = get_value[inst->type_a](vm, inst->reg_a, inst->val_a);
-    int32_t b = get_value[inst->type_b](vm, inst->reg_b, inst->val_b);
+    int32_t a = get_op_a(vm, inst);
+    int32_t b = get_op_b(vm, inst);
     int64_t res = (int64_t)a * (int64_t)b;
-    set_value[inst->type_a](vm, inst->reg_a, inst->val_a, (int32_t)res);
+    set_op_a(vm, inst, (int32_t)res);
     cpu_update_flags(vm, res, a, b, false);
 }
 
 // DIV (0x14): A = A / B
 void inst_div(VM *vm, const Instruction *inst) {
-    int32_t a = get_value[inst->type_a](vm, inst->reg_a, inst->val_a);
-    int32_t b = get_value[inst->type_b](vm, inst->reg_b, inst->val_b);
+    int32_t a = get_op_a(vm, inst);
+    int32_t b = get_op_b(vm, inst);
 
     if (b == 0) {
         fprintf(stderr, "Division por cero\n");
@@ -109,165 +150,228 @@ void inst_div(VM *vm, const Instruction *inst) {
 
     int64_t res = (int64_t)a / (int64_t)b;
     vm->registers[REG_AC] = (int32_t)((int64_t)a % (int64_t)b);
-    set_value[inst->type_a](vm, inst->reg_a, inst->val_a, (int32_t)res);
+    set_op_a(vm, inst, (int32_t)res);
     cpu_update_flags(vm, res, a, b, false);
 }
 
 // CMP (0x15): compara A con B (como SUB pero sin guardar resultado)
 void inst_cmp(VM *vm, const Instruction *inst) {
-    int32_t a = get_value[inst->type_a](vm, inst->reg_a, inst->val_a);
-    int32_t b = get_value[inst->type_b](vm, inst->reg_b, inst->val_b);
+    int32_t a = get_op_a(vm, inst);
+    int32_t b = get_op_b(vm, inst);
     int64_t res = (int64_t)a - (int64_t)b;
     cpu_update_flags(vm, res, a, b, true);
 }
 
 // AND (0x16): A = A & B
 void inst_and(VM *vm, const Instruction *inst) {
-    int32_t a = get_value[inst->type_a](vm, inst->reg_a, inst->val_a);
-    int32_t b = get_value[inst->type_b](vm, inst->reg_b, inst->val_b);
+    int32_t a = get_op_a(vm, inst);
+    int32_t b = get_op_b(vm, inst);
     int32_t res = a & b;
-    set_value[inst->type_a](vm, inst->reg_a, inst->val_a, res);
+    set_op_a(vm, inst, res);
     cpu_update_flags(vm, (int64_t)res, a, b, false);
 }
 
 // OR (0x17): A = A | B
 void inst_or(VM *vm, const Instruction *inst) {
-    int32_t a = get_value[inst->type_a](vm, inst->reg_a, inst->val_a);
-    int32_t b = get_value[inst->type_b](vm, inst->reg_b, inst->val_b);
+    int32_t a = get_op_a(vm, inst);
+    int32_t b = get_op_b(vm, inst);
     int32_t res = a | b;
-    set_value[inst->type_a](vm, inst->reg_a, inst->val_a, res);
+    set_op_a(vm, inst, res);
     cpu_update_flags(vm, (int64_t)res, a, b, false);
 }
 
 // XOR (0x18): A = A ^ B
 void inst_xor(VM *vm, const Instruction *inst) {
-    int32_t a = get_value[inst->type_a](vm, inst->reg_a, inst->val_a);
-    int32_t b = get_value[inst->type_b](vm, inst->reg_b, inst->val_b);
+    int32_t a = get_op_a(vm, inst);
+    int32_t b = get_op_b(vm, inst);
     int32_t res = a ^ b;
-    set_value[inst->type_a](vm, inst->reg_a, inst->val_a, res);
+    set_op_a(vm, inst, res);
     cpu_update_flags(vm, (int64_t)res, a, b, false);
 }
 
 // SWAP (0x19): intercambia A y B
 void inst_swap(VM *vm, const Instruction *inst) {
-    int32_t a = get_value[inst->type_a](vm, inst->reg_a, inst->val_a);
-    int32_t b = get_value[inst->type_b](vm, inst->reg_b, inst->val_b);
-    set_value[inst->type_a](vm, inst->reg_a, inst->val_a, b);
-    set_value[inst->type_b](vm, inst->reg_b, inst->val_b, a);
+    int32_t a = get_op_a(vm, inst);
+    int32_t b = get_op_b(vm, inst);
+    set_op_a(vm, inst, b);
+    set_op_b(vm, inst, a);
     cpu_update_flags(vm, (int64_t)b, b, 0, false);
 }
 
 // SHL (0x1A): shift logico izquierda
 void inst_shl(VM *vm, const Instruction *inst) {
-    int32_t a = get_value[inst->type_a](vm, inst->reg_a, inst->val_a);
-    int32_t b = get_value[inst->type_b](vm, inst->reg_b, inst->val_b);
+    int32_t a = get_op_a(vm, inst);
+    int32_t b = get_op_b(vm, inst);
     int64_t res = (int64_t)((uint32_t)a << b);
-    set_value[inst->type_a](vm, inst->reg_a, inst->val_a, (int32_t)res);
+    set_op_a(vm, inst, (int32_t)res);
     cpu_update_flags(vm, res, a, b, false);
 }
 
 // SHR (0x1B): shift logico derecha
 void inst_shr(VM *vm, const Instruction *inst) {
-    int32_t a = get_value[inst->type_a](vm, inst->reg_a, inst->val_a);
-    int32_t b = get_value[inst->type_b](vm, inst->reg_b, inst->val_b);
+    int32_t a = get_op_a(vm, inst);
+    int32_t b = get_op_b(vm, inst);
     uint32_t res = (uint32_t)a >> b;
-    set_value[inst->type_a](vm, inst->reg_a, inst->val_a, (int32_t)res);
+    set_op_a(vm, inst, (int32_t)res);
     cpu_update_flags(vm, (int64_t)(int32_t)res, a, b, false);
 }
 
 // SAR (0x1C): shift aritmetico (mantiene signo)
 void inst_sar(VM *vm, const Instruction *inst) {
-    int32_t a = get_value[inst->type_a](vm, inst->reg_a, inst->val_a);
-    int32_t b = get_value[inst->type_b](vm, inst->reg_b, inst->val_b);
+    int32_t a = get_op_a(vm, inst);
+    int32_t b = get_op_b(vm, inst);
     int32_t res = a >> b;
-    set_value[inst->type_a](vm, inst->reg_a, inst->val_a, res);
+    set_op_a(vm, inst, res);
     cpu_update_flags(vm, (int64_t)res, a, b, false);
 }
 
 // LDL (0x1D): carga 16 bits bajos
 void inst_ldl(VM *vm, const Instruction *inst) {
-    int32_t a = get_value[inst->type_a](vm, inst->reg_a, inst->val_a);
-    int32_t b = get_value[inst->type_b](vm, inst->reg_b, inst->val_b);
+    int32_t a = get_op_a(vm, inst);
+    int32_t b = get_op_b(vm, inst);
     int32_t res = (a & (int32_t)0xFFFF0000) | (b & 0x0000FFFF);
-    set_value[inst->type_a](vm, inst->reg_a, inst->val_a, res);
+    set_op_a(vm, inst, res);
 }
 
 // LDH (0x1E): carga 16 bits altos
 void inst_ldh(VM *vm, const Instruction *inst) {
-    int32_t a = get_value[inst->type_a](vm, inst->reg_a, inst->val_a);
-    int32_t b = get_value[inst->type_b](vm, inst->reg_b, inst->val_b);
+    int32_t a = get_op_a(vm, inst);
+    int32_t b = get_op_b(vm, inst);
     int32_t res = (a & 0x0000FFFF) | ((b & 0x0000FFFF) << 16);
-    set_value[inst->type_a](vm, inst->reg_a, inst->val_a, res);
+    set_op_a(vm, inst, res);
 }
 
 // RND (0x1F): numero aleatorio entre 0 y B
 void inst_rnd(VM *vm, const Instruction *inst) {
-    int32_t b = get_value[inst->type_b](vm, inst->reg_b, inst->val_b);
+    int32_t b = get_op_b(vm, inst);
     int32_t res = (b != 0) ? (rand() % (b + 1)) : 0;
-    set_value[inst->type_a](vm, inst->reg_a, inst->val_a, res);
+    set_op_a(vm, inst, res);
 }
 
 // NOT (0x0A): A = ~A
 void inst_not(VM *vm, const Instruction *inst) {
-    int32_t a = get_value[inst->type_a](vm, inst->reg_a, inst->val_a);
+    int32_t a = get_op_a(vm, inst);
     int32_t res = ~a;
-    set_value[inst->type_a](vm, inst->reg_a, inst->val_a, res);
+    set_op_a(vm, inst, res);
     cpu_update_flags(vm, (int64_t)res, a, 0, false);
 }
 
 // JMP (0x01): salto incondicional
 void inst_jmp(VM *vm, const Instruction *inst) {
-    vm->registers[REG_IP] = get_value[inst->type_a](vm, inst->reg_a, inst->val_a);
+    vm->registers[REG_IP] = get_op_a(vm, inst);
 }
 
 // JP (0x02): positivo (N=0 y Z=0)
 void inst_jp(VM *vm, const Instruction *inst) {
     int32_t cc = vm->registers[REG_CC];
     if (!(cc & (1 << 31)) && !(cc & (1 << 30)))
-        vm->registers[REG_IP] = get_value[inst->type_a](vm, inst->reg_a, inst->val_a);
+        vm->registers[REG_IP] = get_op_a(vm, inst);
 }
 
 // JN (0x03): negativo (N=1)
 void inst_jn(VM *vm, const Instruction *inst) {
     if (vm->registers[REG_CC] & (1 << 31))
-        vm->registers[REG_IP] = get_value[inst->type_a](vm, inst->reg_a, inst->val_a);
+        vm->registers[REG_IP] = get_op_a(vm, inst);
 }
 
 // JZ (0x04): cero (Z=1)
 void inst_jz(VM *vm, const Instruction *inst) {
     if (vm->registers[REG_CC] & (1 << 30))
-        vm->registers[REG_IP] = get_value[inst->type_a](vm, inst->reg_a, inst->val_a);
+        vm->registers[REG_IP] = get_op_a(vm, inst);
 }
 
 // JC (0x05): carry (C=1)
 void inst_jc(VM *vm, const Instruction *inst) {
     if (vm->registers[REG_CC] & (1 << 29))
-        vm->registers[REG_IP] = get_value[inst->type_a](vm, inst->reg_a, inst->val_a);
+        vm->registers[REG_IP] = get_op_a(vm, inst);
 }
 
 // JV (0x06): overflow (V=1)
 void inst_jv(VM *vm, const Instruction *inst) {
     if (vm->registers[REG_CC] & (1 << 28))
-        vm->registers[REG_IP] = get_value[inst->type_a](vm, inst->reg_a, inst->val_a);
+        vm->registers[REG_IP] = get_op_a(vm, inst);
 }
 
 // JNP (0x07): no positivo (N=1 o Z=1)
 void inst_jnp(VM *vm, const Instruction *inst) {
     int32_t cc = vm->registers[REG_CC];
     if ((cc & (1 << 31)) || (cc & (1 << 30)))
-        vm->registers[REG_IP] = get_value[inst->type_a](vm, inst->reg_a, inst->val_a);
+        vm->registers[REG_IP] = get_op_a(vm, inst);
 }
 
 // JNN (0x08): no negativo (N=0)
 void inst_jnn(VM *vm, const Instruction *inst) {
     if (!(vm->registers[REG_CC] & (1 << 31)))
-        vm->registers[REG_IP] = get_value[inst->type_a](vm, inst->reg_a, inst->val_a);
+        vm->registers[REG_IP] = get_op_a(vm, inst);
 }
 
 // JNZ (0x09): no cero (Z=0)
 void inst_jnz(VM *vm, const Instruction *inst) {
     if (!(vm->registers[REG_CC] & (1 << 30)))
-        vm->registers[REG_IP] = get_value[inst->type_a](vm, inst->reg_a, inst->val_a);
+        vm->registers[REG_IP] = get_op_a(vm, inst);
+}
+
+// Limite superior de la pila (SS + tamano de segmento)
+static uint32_t get_stack_max(const VM *vm) {
+    uint16_t ss_index = (uint16_t)(((uint32_t)vm->registers[REG_SS] >> 16) & 0xFFFF);
+    if (ss_index >= NUM_SEGMENTS || vm->segments[ss_index].base == 0xFFFF) {
+        return (uint32_t)vm->registers[REG_SS];
+    }
+    return (uint32_t)vm->registers[REG_SS] + vm->segments[ss_index].size;
+}
+
+// PUSH (0x0B): apilar dato de 4 bytes
+void inst_push(VM *vm, const Instruction *inst) {
+    vm->registers[REG_SP] -= 4;
+    if ((uint32_t)vm->registers[REG_SP] < (uint32_t)vm->registers[REG_SS]) {
+        fprintf(stderr, "Stack overflow\n");
+        exit(1);
+    }
+    int32_t val = get_op_a(vm, inst);
+    mem_write(vm, (uint32_t)vm->registers[REG_SP], (uint32_t)val, 4);
+}
+
+// POP (0x0C): desapilar dato de 4 bytes
+void inst_pop(VM *vm, const Instruction *inst) {
+    uint32_t sp_max = get_stack_max(vm);
+    if ((uint32_t)vm->registers[REG_SP] + 4 > sp_max) {
+        fprintf(stderr, "Stack underflow\n");
+        exit(1);
+    }
+    uint32_t val = mem_read(vm, (uint32_t)vm->registers[REG_SP], 4);
+    set_op_a(vm, inst, (int32_t)val);
+    vm->registers[REG_SP] += 4;
+}
+
+// CALL (0x0D): llamada a subrutina (PUSH IP y salto a CS + operando)
+void inst_call(VM *vm, const Instruction *inst) {
+    vm->registers[REG_SP] -= 4;
+    if ((uint32_t)vm->registers[REG_SP] < (uint32_t)vm->registers[REG_SS]) {
+        fprintf(stderr, "Stack overflow\n");
+        exit(1);
+    }
+    mem_write(vm, (uint32_t)vm->registers[REG_SP], (uint32_t)vm->registers[REG_IP], 4);
+
+    int32_t target = get_op_a(vm, inst);
+    uint32_t cs_segment = (uint32_t)vm->registers[REG_CS] & 0xFFFF0000;
+    vm->registers[REG_IP] = (int32_t)(cs_segment | ((uint32_t)target & 0x0000FFFF));
+}
+
+// RET (0x0E): retorno de subrutina (POP IP)
+void inst_ret(VM *vm, const Instruction *inst) {
+    (void)inst;
+    uint32_t sp_max = get_stack_max(vm);
+    if ((uint32_t)vm->registers[REG_SP] + 4 > sp_max) {
+        fprintf(stderr, "Stack underflow\n");
+        exit(1);
+    }
+    uint32_t ret_ip = mem_read(vm, (uint32_t)vm->registers[REG_SP], 4);
+    vm->registers[REG_SP] += 4;
+    vm->registers[REG_IP] = (int32_t)ret_ip;
+
+    if (ret_ip == 0xFFFFFFFF) {
+        vm->running = false;
+    }
 }
 
 // Funcion auxiliar para imprimir en binario
@@ -284,7 +388,7 @@ static void print_binary(uint32_t val, uint16_t cell_size) {
 // EDX: direccion logica inicial
 // ECX: 16 bits bajos = cantidad de celdas, 16 bits altos = tamaño de celda
 void inst_sys(VM *vm, const Instruction *inst) {
-    int32_t syscall_op = get_value[inst->type_a](vm, inst->reg_a, inst->val_a);
+    int32_t syscall_op = get_op_a(vm, inst);
     int32_t format = vm->registers[REG_EAX];
     uint32_t base_addr = (uint32_t)vm->registers[REG_EDX];
     uint16_t count = (uint16_t)(vm->registers[REG_ECX] & 0xFFFF);
@@ -306,7 +410,6 @@ void inst_sys(VM *vm, const Instruction *inst) {
             fprintf(stderr, "Fallo de segmento\n");
             exit(1);
         }
-
 
         if (syscall_op == 1) {
             // READ: leer del teclado hacia la memoria
@@ -352,21 +455,18 @@ void inst_sys(VM *vm, const Instruction *inst) {
             printf("[%04X]: ", phys);
 
             if (format & 0x02) {
-                printf("%c\t", (char)(val & 0xFF));
-            } if (format & 0x04) {
-                printf("0o%o\t", val);
-            } if (format & 0x08) {
-                printf("0x%X\t", val);
-            } if (format & 0x10) {
-                printf("0b");
+                printf("%c\n", (char)(val & 0xFF));
+            } else if (format & 0x04) {
+                printf("%o\n", val);
+            } else if (format & 0x08) {
+                printf("%X\n", val);
+            } else if (format & 0x10) {
                 print_binary(val, cell_size);
-                printf("\t");
-            } if (format & 0x01){
+                printf("\n");
+            } else {
                 // Decimal
-                printf("%d\t", (int32_t)val);
+                printf("%d\n", (int32_t)val);
             }
-            printf("\n");
         }
     }
 }
-

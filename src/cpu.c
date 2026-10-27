@@ -1,4 +1,4 @@
-﻿#include <stdio.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include "cpu.h"
@@ -64,8 +64,12 @@ void cpu_init(void) {
     dispatch_table[0x08] = inst_jnn;
     dispatch_table[0x09] = inst_jnz;
     dispatch_table[0x0A] = inst_not;
+    dispatch_table[0x0B] = inst_push;
+    dispatch_table[0x0C] = inst_pop;
+    dispatch_table[0x0D] = inst_call;
 
     // Sin operandos
+    dispatch_table[0x0E] = inst_ret;
     dispatch_table[0x0F] = inst_stop;
 
     // Dos operandos
@@ -117,14 +121,52 @@ void cpu_step(VM *vm) {
 // Bucle principal de ejecucion
 void cpu_run(VM *vm) {
     while (vm->running) {
-        uint16_t cs_size = vm->segments[0].size;
+        if ((uint32_t)vm->registers[REG_IP] == 0xFFFFFFFF) {
+            vm->running = false;
+            break;
+        }
+
+        uint16_t cs_idx = (uint16_t)(((uint32_t)vm->registers[REG_CS] >> 16) & 0xFFFF);
+        uint16_t cs_size = (cs_idx < NUM_SEGMENTS && vm->segments[cs_idx].base != 0xFFFF)
+                           ? vm->segments[cs_idx].size : vm->segments[0].size;
+        uint16_t ip_seg = (uint16_t)(((uint32_t)vm->registers[REG_IP] >> 16) & 0xFFFF);
         uint16_t ip_offset = (uint16_t)(vm->registers[REG_IP] & 0xFFFF);
 
-        if (ip_offset >= cs_size) {
+        if (ip_seg != cs_idx || ip_offset >= cs_size) {
             vm->running = false;
             break;
         }
 
         cpu_step(vm);
     }
+}
+
+// Inicializa SP y carga el frame inicial en la pila (RET=-1, argc, argv)
+void cpu_init_stack(VM *vm, int argc, uint32_t argv_ptr) {
+    uint32_t ss_val = (uint32_t)vm->registers[REG_SS];
+    // Si SS no existe (-1) o no fue inicializado (0 en binarios v1), no hay pila
+    if (ss_val == 0xFFFFFFFF || ss_val == 0) {
+        return;
+    }
+
+    uint16_t ss_idx = (uint16_t)((ss_val >> 16) & 0xFFFF);
+    if (ss_idx >= NUM_SEGMENTS || vm->segments[ss_idx].base == 0xFFFF) {
+        return; // No hay Stack Segment definido
+    }
+
+    uint16_t stack_size = vm->segments[ss_idx].size;
+    // Inicialmente SP apunta al byte fuera del Stack Segment (SS + tamano)
+    vm->registers[REG_SP] = (int32_t)((uint32_t)vm->registers[REG_SS] + stack_size);
+
+    // 1. Apilar puntero a argv (o -1 si no hay)
+    vm->registers[REG_SP] -= 4;
+    mem_write(vm, (uint32_t)vm->registers[REG_SP], argv_ptr, 4);
+
+    // 2. Apilar argc
+    vm->registers[REG_SP] -= 4;
+    mem_write(vm, (uint32_t)vm->registers[REG_SP], (uint32_t)argc, 4);
+
+    // 3. Apilar direccion de retorno (-1) para que RET en main termine el proceso
+    vm->registers[REG_SP] -= 4;
+    mem_write(vm, (uint32_t)vm->registers[REG_SP], 0xFFFFFFFF, 4);
 }
