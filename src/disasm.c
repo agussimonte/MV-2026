@@ -101,8 +101,10 @@ void disasm_all(const VM *vm){
         return;
     }
 
-    uint16_t addr = 0;
-    uint16_t fin_codigo = vm->segments[0].size;
+    if (vm->registers[REG_CS] == -1) return;
+    uint16_t cs_idx = (uint16_t)((vm->registers[REG_CS] >> 16) & 0xFFFF);
+    uint16_t addr = vm->segments[cs_idx].base;
+    uint16_t fin_codigo = addr + vm->segments[cs_idx].size;
 
     while (addr < fin_codigo){
         Instruction inst = decode_instruction(vm, addr);

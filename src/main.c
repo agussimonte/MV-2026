@@ -32,6 +32,7 @@ int main(int argc, char *argv[]){
     uint32_t ram_size_kib = 16; //16 KiB por defecto
     int param_count = 0;
     char **param_values = NULL;
+    bool has_p_flag = false;
 
     //parseo de argumentos
     for (int i = 1; i < argc; i++){
@@ -45,6 +46,7 @@ int main(int argc, char *argv[]){
             }
             ram_size_kib = (uint32_t)m_val; //actualizo el nuevo tamaño de ram
         } else if (strcmp(argv[i], "-p") == 0){
+            has_p_flag = true;
             //todos los argumentos que le siguen son parametros del programa
             param_count = argc - (i + 1);
             if (param_count > 0) {
@@ -90,7 +92,7 @@ int main(int argc, char *argv[]){
 
     if (vmx_path != NULL){
         //carga programa en la memoria
-        if (!load_vmx(&vm, vmx_path)){
+        if (!load_vmx(&vm, vmx_path, has_p_flag, param_count, param_values)){
             free(vm.memory);
             return 1;
         }
