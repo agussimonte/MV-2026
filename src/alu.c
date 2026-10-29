@@ -3,6 +3,7 @@
 #include "alu.h"
 #include "cpu.h"
 #include "mmu.h"
+#include "vmi.h"
 
 // Acceso a operandos: lectura con soporte de subregistros y modificadores de tamaño
 static int32_t get_operand(VM *vm, OperandType type, uint8_t reg, int16_t val, uint8_t sector, uint8_t mem_size) {
@@ -438,6 +439,12 @@ void inst_sys(VM *vm, const Instruction *inst) {
             offset++;
         }
         fflush(stdout);
+        return;
+    }
+
+    if (syscall_op == 0x0F) {
+        // BREAKPOINT (0x0F): pausa y genera imagen .vmi para depuracion
+        vmi_handle_breakpoint(vm);
         return;
     }
 

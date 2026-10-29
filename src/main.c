@@ -1,4 +1,4 @@
-﻿#include <stdio.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdbool.h> 
@@ -7,6 +7,7 @@
 #include "loader.h"
 #include "cpu.h"
 #include "disasm.h"
+#include "vmi.h"
 
 //comprueba sufijo ignorando mayusculas/minusculas, detecta .vmx o .vmi
 static bool ends_with(const char *str, const char *suffix){ //*suffix recibe ".vmx" o ".vmi"
@@ -114,9 +115,18 @@ int main(int argc, char *argv[]){
             cpu_run(&vm);
         }
     }else{
-        //(parte de agus?  / vmi.c)
-        fprintf(stderr, "modulo VMI.\n");
-        exit_code = 1;
+        // Cargar imagen de memoria (.vmi) y continuar la ejecucion
+        if (!vmi_load(&vm, vmi_path)) {
+            free(vm.memory);
+            return 1;
+        }
+
+        if (disasm_flag) {
+            disasm_all(&vm);
+        } else {
+            cpu_init();
+            cpu_run(&vm);
+        }
     }
 
     free(vm.memory);

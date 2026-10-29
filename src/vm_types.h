@@ -110,6 +110,7 @@ typedef struct {
     bool running;                              // Control del ciclo del procesador
     bool disasm_mode;                          // Flag -d activado
     const char *vmi_path;                      // Ruta del archivo .vmi (o NULL si no se especifico)
+    bool step_mode;                            // Modo paso a paso activado por Enter en breakpoint
 } VM;
 
 #endif

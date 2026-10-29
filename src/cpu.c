@@ -5,6 +5,7 @@
 #include "mmu.h"
 #include "decoder.h"
 #include "alu.h"
+#include "vmi.h"
 
 // Tabla de despacho indexada por opcode (0x00 a 0x1F)
 static InstructionHandler dispatch_table[32];
@@ -116,6 +117,10 @@ void cpu_step(VM *vm) {
     }
 
     dispatch_table[inst.opcode](vm, &inst);
+
+    if (vm->step_mode && vm->running) {
+        vmi_handle_breakpoint(vm);
+    }
 }
 
 // Bucle principal de ejecucion
