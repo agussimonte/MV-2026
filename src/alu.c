@@ -389,6 +389,58 @@ static void print_binary(uint32_t val, uint16_t cell_size) {
 // ECX: 16 bits bajos = cantidad de celdas, 16 bits altos = tamaño de celda
 void inst_sys(VM *vm, const Instruction *inst) {
     int32_t syscall_op = get_op_a(vm, inst);
+
+    if (syscall_op == 0x00) {
+        // CLEAR SCREEN (0x00): limpia la pantalla de la consola
+        printf("\033[H\033[2J\033[3J");
+        fflush(stdout);
+        return;
+    }
+
+    if (syscall_op == 0x03) {
+        // STRING READ (0x03): lee del teclado y guarda en [EDX] hasta '\0'
+        uint32_t base_addr = (uint32_t)vm->registers[REG_EDX];
+        uint32_t segment = base_addr & 0xFFFF0000;
+        uint32_t start_offset = base_addr & 0x0000FFFF;
+        int32_t max_chars = vm->registers[REG_ECX]; // -1 = sin limite
+
+        int c;
+        int32_t read_count = 0;
+        while ((c = getchar()) != EOF && c != '\n') {
+            if (max_chars != -1 && read_count >= max_chars) {
+                // Descartar el resto de la linea
+                while (c != '\n' && (c = getchar()) != EOF);
+                break;
+            }
+            uint32_t offset = (start_offset + (uint32_t)read_count) & 0xFFFF;
+            mem_write(vm, segment | offset, (uint8_t)c, 1);
+            read_count++;
+        }
+        // Guardar terminador '\0'
+        uint32_t null_offset = (start_offset + (uint32_t)read_count) & 0xFFFF;
+        mem_write(vm, segment | null_offset, 0x00, 1);
+        return;
+    }
+
+    if (syscall_op == 0x04) {
+        // STRING WRITE (0x04): imprime string desde [EDX] hasta encontrar '\0'
+        uint32_t base_addr = (uint32_t)vm->registers[REG_EDX];
+        uint32_t segment = base_addr & 0xFFFF0000;
+        uint32_t offset = base_addr & 0x0000FFFF;
+
+        while (1) {
+            uint32_t byte_val = mem_read(vm, segment | (offset & 0xFFFF), 1);
+            char ch = (char)(byte_val & 0xFF);
+            if (ch == '\0') {
+                break;
+            }
+            putchar(ch);
+            offset++;
+        }
+        fflush(stdout);
+        return;
+    }
+
     int32_t format = vm->registers[REG_EAX];
     uint32_t base_addr = (uint32_t)vm->registers[REG_EDX];
     uint16_t count = (uint16_t)(vm->registers[REG_ECX] & 0xFFFF);
