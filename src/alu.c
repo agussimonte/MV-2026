@@ -259,57 +259,59 @@ void inst_not(VM *vm, const Instruction *inst) {
 
 // JMP (0x01): salto incondicional
 void inst_jmp(VM *vm, const Instruction *inst) {
-    vm->registers[REG_IP] = get_op_a(vm, inst);
+    int32_t target = get_op_a(vm, inst);
+    uint32_t cs_segment = (uint32_t)vm->registers[REG_CS] & 0xFFFF0000;
+    vm->registers[REG_IP] = (int32_t)(cs_segment | ((uint32_t)target & 0x0000FFFF));
 }
 
 // JP (0x02): positivo (N=0 y Z=0)
 void inst_jp(VM *vm, const Instruction *inst) {
     int32_t cc = vm->registers[REG_CC];
     if (!(cc & (1 << 31)) && !(cc & (1 << 30)))
-        vm->registers[REG_IP] = get_op_a(vm, inst);
+        inst_jmp(vm, inst);
 }
 
 // JN (0x03): negativo (N=1)
 void inst_jn(VM *vm, const Instruction *inst) {
     if (vm->registers[REG_CC] & (1 << 31))
-        vm->registers[REG_IP] = get_op_a(vm, inst);
+        inst_jmp(vm, inst);
 }
 
 // JZ (0x04): cero (Z=1)
 void inst_jz(VM *vm, const Instruction *inst) {
     if (vm->registers[REG_CC] & (1 << 30))
-        vm->registers[REG_IP] = get_op_a(vm, inst);
+        inst_jmp(vm, inst);
 }
 
 // JC (0x05): carry (C=1)
 void inst_jc(VM *vm, const Instruction *inst) {
     if (vm->registers[REG_CC] & (1 << 29))
-        vm->registers[REG_IP] = get_op_a(vm, inst);
+        inst_jmp(vm, inst);
 }
 
 // JV (0x06): overflow (V=1)
 void inst_jv(VM *vm, const Instruction *inst) {
     if (vm->registers[REG_CC] & (1 << 28))
-        vm->registers[REG_IP] = get_op_a(vm, inst);
+        inst_jmp(vm, inst);
 }
 
 // JNP (0x07): no positivo (N=1 o Z=1)
 void inst_jnp(VM *vm, const Instruction *inst) {
     int32_t cc = vm->registers[REG_CC];
     if ((cc & (1 << 31)) || (cc & (1 << 30)))
-        vm->registers[REG_IP] = get_op_a(vm, inst);
+        inst_jmp(vm, inst);
 }
 
 // JNN (0x08): no negativo (N=0)
 void inst_jnn(VM *vm, const Instruction *inst) {
     if (!(vm->registers[REG_CC] & (1 << 31)))
-        vm->registers[REG_IP] = get_op_a(vm, inst);
+        inst_jmp(vm, inst);
 }
 
 // JNZ (0x09): no cero (Z=0)
 void inst_jnz(VM *vm, const Instruction *inst) {
     if (!(vm->registers[REG_CC] & (1 << 30)))
-        vm->registers[REG_IP] = get_op_a(vm, inst);
+        inst_jmp(vm, inst);
 }
 
 // Limite superior de la pila (SS + tamano de segmento)
@@ -444,7 +446,10 @@ void inst_sys(VM *vm, const Instruction *inst) {
 
     if (syscall_op == 0x0F) {
         // BREAKPOINT (0x0F): pausa y genera imagen .vmi para depuracion
-        vmi_handle_breakpoint(vm);
+        // En paso a paso, cpu_step realiza esta pausa al terminar la instruccion.
+        if (!vm->step_mode) {
+            vmi_handle_breakpoint(vm);
+        }
         return;
     }
 

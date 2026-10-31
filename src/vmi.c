@@ -8,6 +8,12 @@ int vmi_save(const VM *vm, const char *filepath) {
         return 0;
     }
 
+    if (vm->ram_size == 0 || vm->ram_size % 1024 != 0 ||
+        vm->ram_size / 1024 > UINT16_MAX) {
+        fprintf(stderr, "Error: Tamanio de RAM no representable en una imagen VMI.\n");
+        return 0;
+    }
+
     FILE *f = fopen(filepath, "wb");
     if (!f) {
         fprintf(stderr, "Error: No se pudo abrir el archivo de imagen '%s' para escritura\n", filepath);
@@ -68,8 +74,7 @@ int vmi_save(const VM *vm, const char *filepath) {
         }
     }
 
-    fclose(f);
-    return 1;
+    return fclose(f) == 0;
 }
 
 int vmi_load(VM *vm, const char *filepath) {
@@ -105,6 +110,11 @@ int vmi_load(VM *vm, const char *filepath) {
     }
 
     uint16_t ram_kib = ((uint16_t)header[6] << 8) | (uint16_t)header[7];
+    if (ram_kib == 0) {
+        fprintf(stderr, "Error: Tamanio de memoria invalido en imagen VMI.\n");
+        fclose(f);
+        return 0;
+    }
     uint32_t needed_ram = (uint32_t)ram_kib * 1024;
 
     // Asegurar que la memoria RAM este alocada con el tamaño de la imagen
@@ -168,6 +178,13 @@ void vmi_handle_breakpoint(VM *vm) {
     // Generar archivo de imagen con el estado actual
     if (!vmi_save(vm, vm->vmi_path)) {
         fprintf(stderr, "Error al generar imagen '%s'\n", vm->vmi_path);
+        exit(1);
+    }
+
+    // STOP o RET pueden finalizar el proceso durante un paso. La imagen queda
+    // actualizada, pero no hay una proxima instruccion para esperar otro Enter.
+    if (!vm->running) {
+        return;
     }
 
     // Esperar accion del usuario: 'g' (go), 'q' (quit), o Enter (paso a paso)

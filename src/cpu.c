@@ -116,9 +116,12 @@ void cpu_step(VM *vm) {
         exit(1);
     }
 
+    bool was_stepping = vm->step_mode;
     dispatch_table[inst.opcode](vm, &inst);
 
-    if (vm->step_mode && vm->running) {
+    // Enter en SYS F habilita el paso para la siguiente instruccion.
+    // Si ya estabamos avanzando de a una, guardar tambien el estado final.
+    if (was_stepping) {
         vmi_handle_breakpoint(vm);
     }
 }
