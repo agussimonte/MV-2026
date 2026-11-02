@@ -519,18 +519,20 @@ void inst_sys(VM *vm, const Instruction *inst) {
             printf("[%04X]: ", phys);
 
             if (format & 0x02) {
-                printf("%c\n", (char)(val & 0xFF));
-            } else if (format & 0x04) {
-                printf("%o\n", val);
-            } else if (format & 0x08) {
-                printf("%X\n", val);
-            } else if (format & 0x10) {
+                printf("%c\t", (char)(val & 0xFF));
+            } if (format & 0x04) {
+                printf("0o%o\t", val);
+            } if (format & 0x08) {
+                printf("0x%X\t", val);
+            } if (format & 0x10) {
+                printf("0b");
                 print_binary(val, cell_size);
-                printf("\n");
-            } else {
+                printf("\t");
+            } if (format & 0x01){
                 // Decimal
-                printf("%d\n", (int32_t)val);
+                printf("%d\t", (int32_t)val);
             }
+            printf("\n");
         }
     }
 }
